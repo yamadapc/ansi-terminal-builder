@@ -6,6 +6,7 @@ import           System.Console.ANSI
 import           System.Console.ANSI.Builder
 import           Test.Hspec
 
+spec :: Spec
 spec = do
     describe "ANSI helpers" $ do
         it "lets us easily construct Builder values" $
