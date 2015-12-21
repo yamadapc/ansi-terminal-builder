@@ -1,14 +1,28 @@
 module System.Console.ANSI.Builder
+    (
+      Builder (..)
+    , putBuilder
+    , renderBuilder
+    , fuse
+    -- * SGRs
+    , vBlue
+    , vBlueBg
+    , vRed
+    , vRedBg
+    -- * Re-exports
+    , (<>)
+    , mappend
+    , mempty
+    )
   where
 
 import           Control.Monad
-import           Data.Default
-import           Data.Maybe
 import           Data.Monoid
 import           Data.Sequence          (Seq, index, (<|), (><))
 import qualified Data.Sequence          as Sequence
 import           Data.String
 import           Data.Text              (Text)
+import qualified Data.Text.Lazy         as Text (toStrict)
 import qualified Data.Text.Lazy.Builder as Text
 import qualified Data.Text.Lazy.IO      as Text
 import           System.Console.ANSI
@@ -32,62 +46,29 @@ instance Monoid Builder where
     mempty = Builder mempty
 
 instance IsString Builder where
-    fromString s = Builder (Sequence.singleton (fromString s, []))
+    fromString s = bstr (fromString s)
 
 -- |
--- We provide an easier way of setting 'SGR' attributes.
-data SimpleSGR = SimpleSGR { sgrForeground :: (ColorIntensity, Color)
-                           , sgrBackground :: (ColorIntensity, Color)
-                           , sgrItalic     :: Bool
-                           , sgrUnderline  :: Underlining
-                           , sgrBlink      :: BlinkSpeed
-                           , sgrIntensity  :: ConsoleIntensity
-                           }
-
-instance Default SimpleSGR where
-    def = SimpleSGR { sgrForeground = (Dull, White)
-                    , sgrBackground = (Dull, Black)
-                    , sgrItalic = False
-                    , sgrUnderline = NoUnderline
-                    , sgrBlink = NoBlink
-                    , sgrIntensity = NormalIntensity
-                    }
-
-blue :: SimpleSGR
-blue = def { sgrForeground = (Vivid, Blue) }
-
-background :: SimpleSGR -> SimpleSGR
-background s = s { sgrForeground = sgrForeground def
-                 , sgrBackground = sgrBackground s
-                 }
-
-vivid :: SimpleSGR -> SimpleSGR
-vivid s = s { sgrForeground = let (_, c) = sgrForeground s in (Vivid, c) }
-
-dull :: SimpleSGR -> SimpleSGR
-dull s = s { sgrForeground = let (_, c) = sgrForeground s in (Dull, c) }
+-- Builder from 'Text.Builder'
+bstr :: Text.Builder -> Builder
+bstr s = Builder (Sequence.singleton (s, mempty))
 
 -- |
--- Converts a 'SimpleSGR' to it's minimal 'SGR' list
-toSGR :: SimpleSGR -> [SGR]
-toSGR s = catMaybes
-    [ nonDefault (uncurry (SetColor Foreground)) sgrForeground
-    , nonDefault (uncurry (SetColor Background)) sgrBackground
-    , nonDefault SetItalicized sgrItalic
-    , nonDefault SetUnderlining sgrUnderline
-    , nonDefault SetBlinkSpeed sgrBlink
-    , nonDefault SetConsoleIntensity sgrIntensity
-    ]
-  where
-    nonDefault constructor getter = if getter s == getter def
-                                    then Nothing
-                                    else Just (constructor (getter s))
+-- Builder from 'SGR'
+bsgr :: [SGR] -> Builder
+bsgr s = Builder (Sequence.singleton (mempty, s))
 
-infixr 5 @@
--- |
--- Creates a 'SimpleSGR' property from a Text
-(@@) :: Text -> SimpleSGR -> Builder
-(@@) t s = Builder (Sequence.singleton (Text.fromText t, toSGR s))
+vBlue :: Builder
+vBlue = bsgr [ SetColor Foreground Vivid Blue ]
+
+vBlueBg :: Builder
+vBlueBg = bsgr [ SetColor Background Vivid Blue ]
+
+vRed :: Builder
+vRed = bsgr [ SetColor Foreground Vivid Red ]
+
+vRedBg :: Builder
+vRedBg = bsgr [ SetColor Background Vivid Red ]
 
 -- |
 -- We have two sequences of 'Text' builders and 'SGR' lists. When appending
@@ -101,6 +82,8 @@ fuse :: ANSITextSeq -> ANSITextSeq -> ANSITextSeq
 fuse seq1 seq2
     | len1 == 0 = seq2
     | len2 == 0 = seq1
+    | (t2, sgr2) <- head2, (t1, sgr1) <- last1, t1 == mempty =
+          fuseEdges mempty t2 (sgr1 <> sgr2)
     | (t2, []) <- head2, (t1, sgr) <- last1 =
           fuseEdges t1 t2 sgr
     | (t2, sgr2) <- head2, (t1, sgr1) <- last1, sgr2 == sgr1 =
@@ -121,7 +104,9 @@ fuse seq1 seq2
 -- and will break Windows compatibility, but can make your handling more
 -- efficient and pure.
 renderBuilder :: Builder -> Text
-renderBuilder = undefined
+renderBuilder (Builder sq) =
+    Text.toStrict $ Text.toLazyText $
+    foldr (\(t, _) m -> t <> m) mempty sq
 
 -- |
 -- Renders an ANSI 'Builder' to the terminal. Tries to not waste calls to

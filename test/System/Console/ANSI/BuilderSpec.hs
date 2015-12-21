@@ -10,12 +10,13 @@ spec :: Spec
 spec = do
     describe "ANSI helpers" $ do
         it "lets us easily construct Builder values" $
-            "Hello" @@ blue
+            vBlue <> "Hello"
                 `shouldBe` Builder (fromList [("Hello", [SetColor Foreground Vivid Blue])])
 
         it "lets us easily compose SGR values" $
-            "Hello" @@ background blue
-                `shouldBe` Builder (fromList [("Hello", [SetColor Background Vivid Blue])])
+            vBlue <> vBlueBg <> "Hello"
+                `shouldBe` Builder (fromList [("Hello", [SetColor Foreground Vivid Blue
+                                                        ,SetColor Background Vivid Blue])])
 
     describe "fuse seq1 seq2" $ do
         it "appends two ANSITextSeqs" $
