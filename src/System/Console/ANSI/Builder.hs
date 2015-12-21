@@ -1,4 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
 module System.Console.ANSI.Builder
   where
 
@@ -6,11 +5,10 @@ import           Control.Monad
 import           Data.Default
 import           Data.Maybe
 import           Data.Monoid
-import           Data.Sequence          (Seq, index, tails, (<|), (><))
+import           Data.Sequence          (Seq, index, (<|), (><))
 import qualified Data.Sequence          as Sequence
 import           Data.String
 import           Data.Text              (Text)
-import qualified Data.Text              as Text
 import qualified Data.Text.Lazy.Builder as Text
 import qualified Data.Text.Lazy.IO      as Text
 import           System.Console.ANSI
@@ -129,8 +127,8 @@ renderBuilder = undefined
 -- Renders an ANSI 'Builder' to the terminal. Tries to not waste calls to
 -- 'setSGR' or 'Text.putStr' by fusing whatever it can.
 putBuilder :: Builder -> IO ()
-putBuilder (Builder seq) = do
-    forM_ seq $ \(t, sgr) -> do
+putBuilder (Builder sq) = do
+    forM_ sq $ \(t, sgr) -> do
         setSGR sgr
         Text.putStr (Text.toLazyText t)
     setSGR [Reset]
